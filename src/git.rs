@@ -151,8 +151,17 @@ fn parse_path_lines(text: &str) -> Vec<String> {
     text.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
+        .filter(|line| is_user_changed_path(line))
         .map(ToOwned::to_owned)
         .collect()
+}
+
+fn is_user_changed_path(path: &str) -> bool {
+    !(path.starts_with(".agent-")
+        || path.contains("/.agent-")
+        || path == "target"
+        || path.starts_with("target/")
+        || path.contains("/target/"))
 }
 
 #[cfg(test)]
@@ -169,5 +178,14 @@ mod tests {
         assert_eq!(commits[0].sha, "abc");
         assert_eq!(commits[0].subject, "fix regression");
         assert_eq!(commits[0].files, vec!["src/lib.rs", "tests/lib.rs"]);
+    }
+
+    #[test]
+    fn changed_paths_ignore_agent_and_build_artifacts() {
+        let paths = parse_path_lines(
+            ".agent-sentinel/matrix.json\nsrc/lib.rs\ntarget/debug/sentinel\nnested/.agent-cache/file\n",
+        );
+
+        assert_eq!(paths, vec!["src/lib.rs"]);
     }
 }
