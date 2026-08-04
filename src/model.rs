@@ -78,6 +78,7 @@ pub struct MatrixHealth {
     pub current_head_sha: Option<String>,
     pub head_matches: bool,
     pub dirty_at_scan: bool,
+    pub dirty_now: bool,
     pub changed_files_count: usize,
     pub stale: bool,
     pub confidence: MatrixConfidence,

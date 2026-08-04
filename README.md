@@ -122,6 +122,7 @@ Sentinel now reports matrix health alongside risk data:
 - `stale` when the repo `HEAD` differs from the scan `HEAD`
 - `confidence` lowered for stale or thin-history matrices
 - `warnings` for stale matrices, very small history windows, or dirty scans
+- `dirty_now` when the current worktree has changed or untracked files
 - `known_in_matrix: false` for files with no historical signal
 
 Unknown files are not "proven safe." They are files Sentinel has not seen in the

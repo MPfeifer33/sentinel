@@ -71,6 +71,7 @@ The health object contains:
 - `current_head_sha`
 - `head_matches`
 - `dirty_at_scan`
+- `dirty_now`
 - `changed_files_count`
 - `stale`
 - `confidence`: `high`, `medium`, or `low`

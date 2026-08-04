@@ -140,6 +140,7 @@ fn score_file(stats: FileStats) -> FileRisk {
 pub fn matrix_health(matrix: &FragilityMatrix, repo: &Path) -> Result<MatrixHealth, SentinelError> {
     let current_head_sha = git::head_sha(repo)?;
     let changed_files = git::changed_files(repo)?;
+    let dirty_now = !changed_files.is_empty();
     let head_matches = matrix.head_sha == current_head_sha;
     let stale = !head_matches;
     let mut warnings = Vec::new();
@@ -162,8 +163,14 @@ pub fn matrix_health(matrix: &FragilityMatrix, repo: &Path) -> Result<MatrixHeal
     if matrix.dirty_at_scan {
         warnings.push("matrix was generated while the worktree had changed files".into());
     }
+    if dirty_now {
+        warnings.push(
+            "worktree currently has changed or untracked files; risk rows are historical hints"
+                .into(),
+        );
+    }
 
-    let confidence = if stale || matrix.commits_scanned < 10 {
+    let confidence = if stale || matrix.head_sha.is_none() || matrix.commits_scanned < 10 {
         MatrixConfidence::Low
     } else if matrix.commits_scanned < 50 || matrix.dirty_at_scan {
         MatrixConfidence::Medium
@@ -181,6 +188,7 @@ pub fn matrix_health(matrix: &FragilityMatrix, repo: &Path) -> Result<MatrixHeal
         current_head_sha,
         head_matches,
         dirty_at_scan: matrix.dirty_at_scan,
+        dirty_now,
         changed_files_count: changed_files.len(),
         stale,
         confidence,
@@ -465,6 +473,30 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("different git HEAD")));
+    }
+
+    #[test]
+    fn matrix_health_lowers_confidence_without_head_metadata() {
+        let workspace = scratch_dir().unwrap();
+        let matrix = FragilityMatrix {
+            generated_at_unix: 1,
+            repo: workspace.path().display().to_string(),
+            history_limit: 200,
+            commits_scanned: 100,
+            head_sha: None,
+            dirty_at_scan: false,
+            files: Vec::new(),
+            summary: MatrixSummary::default(),
+        };
+
+        let health = matrix_health(&matrix, workspace.path()).unwrap();
+
+        assert_eq!(health.confidence, MatrixConfidence::Low);
+        assert!(!health.stale);
+        assert!(health
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("does not record a git HEAD")));
     }
 
     fn init_repo(path: &std::path::Path) {

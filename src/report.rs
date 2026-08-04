@@ -1,5 +1,7 @@
 use crate::analyze;
-use crate::model::{FileRisk, FragilityMatrix, MatrixHealth, RelatedTest, RiskLevel};
+use crate::model::{
+    FileRisk, FragilityMatrix, MatrixConfidence, MatrixHealth, RelatedTest, RiskLevel,
+};
 use crate::store::StoreStatus;
 use crate::SentinelError;
 
@@ -83,7 +85,7 @@ pub fn print_risk(
                 "ok": true,
                 "matrix_health": health,
                 "files": risks,
-                "advice": advice_for(&risks),
+                "advice": advice_for(health, &risks),
             }))?
         );
     } else {
@@ -102,7 +104,7 @@ pub fn print_risk(
             print_file_detail(risk);
             println!();
         }
-        println!("  Advice: {}", advice_for(&risks));
+        println!("  Advice: {}", advice_for(health, &risks));
     }
     Ok(())
 }
@@ -124,7 +126,7 @@ pub fn print_doctor(
                 "matrix_health": health,
                 "changed_files": changed_files,
                 "changed_file_risks": risks,
-                "advice": advice_for(&risks),
+                "advice": advice_for(health, &risks),
                 "recommendations": recommendations,
             }))?
         );
@@ -157,7 +159,7 @@ pub fn print_doctor(
             }
         }
         println!();
-        println!("  Advice: {}", advice_for(&risks));
+        println!("  Advice: {}", advice_for(health, &risks));
         println!();
         println!("  Recommended next commands:");
         for recommendation in recommendations {
@@ -329,18 +331,27 @@ fn risks_for(matrix: &FragilityMatrix, files: &[String]) -> Vec<FileRisk> {
         .collect()
 }
 
-fn advice_for(risks: &[FileRisk]) -> String {
-    if risks.iter().any(|risk| risk.level == RiskLevel::High) {
+fn advice_for(health: &MatrixHealth, risks: &[FileRisk]) -> String {
+    let file_advice = if risks.iter().any(|risk| risk.level == RiskLevel::High) {
         "high-risk file present; run targeted tests first, then full validation before commit"
-            .into()
+            .to_string()
     } else if risks.iter().any(|risk| risk.level == RiskLevel::Medium) {
-        "medium risk; run related tests and consider full validation if behavior changed".into()
+        "medium risk; run related tests and consider full validation if behavior changed"
+            .to_string()
     } else if risks.iter().any(|risk| !risk.known_in_matrix) {
-        "unknown file history; use normal validation and consider adding focused tests".into()
+        "unknown file history; use normal validation and consider adding focused tests".to_string()
     } else if risks.is_empty() {
-        "no changed files detected".into()
+        "no changed files detected".to_string()
     } else {
-        "low historical risk; use normal validation for the project".into()
+        "low historical risk; use normal validation for the project".to_string()
+    };
+
+    if health.stale || health.matrix_head_sha.is_none() {
+        format!("matrix is stale or unverified; run `sentinel scan --force` before relying on file risk. {file_advice}")
+    } else if health.confidence == MatrixConfidence::Low {
+        format!("low-confidence matrix; treat scores as hints. {file_advice}")
+    } else {
+        file_advice
     }
 }
 
