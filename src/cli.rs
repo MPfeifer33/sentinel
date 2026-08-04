@@ -92,4 +92,10 @@ pub enum Command {
     },
     /// Show stored matrix status and data sources
     Status,
+    /// Agent preflight: matrix health plus changed-file risk
+    Doctor {
+        /// Number of commits to inspect if no matrix exists
+        #[arg(long, default_value = "200")]
+        limit: usize,
+    },
 }

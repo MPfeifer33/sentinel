@@ -3,8 +3,8 @@
 **What:** Continuous regression watcher. Builds a git-history fragility matrix
 and warns agents when changed files carry historical risk.
 
-**Status:** MVP implemented. Scan, matrix, risk, tests, and status commands are
-available with text and JSON output.
+**Status:** Quality pass in progress. Scan, matrix, risk, tests, status, and
+doctor commands are available with text and JSON output.
 
 **Tech:** Rust 2021, clap 4, serde/serde_json, thiserror.
 
@@ -31,6 +31,7 @@ sentinel risk --file src/main.rs    # inspect explicit file
 sentinel matrix --top 20            # top risky files
 sentinel tests src/main.rs          # historically related tests
 sentinel status                     # storage and source status
+sentinel doctor                     # agent preflight summary
 ```
 
 ## Risk Signals
@@ -40,7 +41,9 @@ sentinel status                     # storage and source status
 - revert/rollback commit subjects
 - source/test co-change
 - line churn
+- matrix freshness and sparse-history confidence
+- unknown-file coverage (`known_in_matrix: false`)
 
 ## Last Updated
 
-2026-06-22 — Initial MVP built.
+2026-08-04 — Added matrix-health trust signals and agent doctor preflight.

@@ -92,6 +92,24 @@ pub fn changed_files(repo: &Path) -> Result<Vec<String>, SentinelError> {
     Ok(files.into_iter().collect())
 }
 
+pub fn head_sha(repo: &Path) -> Result<Option<String>, SentinelError> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo)
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if sha.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(sha))
+    }
+}
+
 fn parse_history(text: &str) -> Vec<CommitRecord> {
     let mut commits = Vec::new();
     let mut current: Option<CommitRecord> = None;

@@ -3,7 +3,10 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::git;
-use crate::model::{FileRisk, FileStats, FragilityMatrix, MatrixSummary, RelatedTest, RiskLevel};
+use crate::model::{
+    FileRisk, FileStats, FragilityMatrix, MatrixConfidence, MatrixHealth, MatrixSummary,
+    RelatedTest, RiskLevel,
+};
 use crate::SentinelError;
 
 const RECENT_WINDOW: usize = 25;
@@ -68,11 +71,14 @@ pub fn build_matrix(repo: &Path, limit: usize) -> Result<FragilityMatrix, Sentin
     });
 
     let summary = summarize(&files);
+    let changed_files = git::changed_files(repo)?;
     Ok(FragilityMatrix {
         generated_at_unix: now_unix(),
         repo: repo.display().to_string(),
         history_limit: limit,
         commits_scanned: commits.len(),
+        head_sha: git::head_sha(repo)?,
+        dirty_at_scan: !changed_files.is_empty(),
         files,
         summary,
     })
@@ -85,6 +91,7 @@ pub fn find_file<'a>(matrix: &'a FragilityMatrix, path: &str) -> Option<&'a File
 pub fn synthetic_quiet_file(path: &str) -> FileRisk {
     FileRisk {
         path: path.to_string(),
+        known_in_matrix: false,
         risk_score: 0,
         level: RiskLevel::Quiet,
         commits: 0,
@@ -115,6 +122,7 @@ fn score_file(stats: FileStats) -> FileRisk {
 
     FileRisk {
         path: stats.path,
+        known_in_matrix: true,
         risk_score,
         level,
         commits: stats.commits,
@@ -127,6 +135,57 @@ fn score_file(stats: FileStats) -> FileRisk {
         related_tests,
         reasons,
     }
+}
+
+pub fn matrix_health(matrix: &FragilityMatrix, repo: &Path) -> Result<MatrixHealth, SentinelError> {
+    let current_head_sha = git::head_sha(repo)?;
+    let changed_files = git::changed_files(repo)?;
+    let head_matches = matrix.head_sha == current_head_sha;
+    let stale = !head_matches;
+    let mut warnings = Vec::new();
+
+    if stale {
+        warnings.push(
+            "matrix was generated from a different git HEAD; run `sentinel scan --force`".into(),
+        );
+    }
+    if matrix.head_sha.is_none() {
+        warnings
+            .push("matrix does not record a git HEAD; rescan to capture freshness metadata".into());
+    }
+    if matrix.commits_scanned < 10 {
+        warnings.push(format!(
+            "thin history: only {} commit(s) scanned",
+            matrix.commits_scanned
+        ));
+    }
+    if matrix.dirty_at_scan {
+        warnings.push("matrix was generated while the worktree had changed files".into());
+    }
+
+    let confidence = if stale || matrix.commits_scanned < 10 {
+        MatrixConfidence::Low
+    } else if matrix.commits_scanned < 50 || matrix.dirty_at_scan {
+        MatrixConfidence::Medium
+    } else {
+        MatrixConfidence::High
+    };
+
+    Ok(MatrixHealth {
+        repo: matrix.repo.clone(),
+        generated_at_unix: matrix.generated_at_unix,
+        history_limit: matrix.history_limit,
+        commits_scanned: matrix.commits_scanned,
+        tracked_files: matrix.summary.tracked_files,
+        matrix_head_sha: matrix.head_sha.clone(),
+        current_head_sha,
+        head_matches,
+        dirty_at_scan: matrix.dirty_at_scan,
+        changed_files_count: changed_files.len(),
+        stale,
+        confidence,
+        warnings,
+    })
 }
 
 fn top_related_tests(related_tests: BTreeMap<String, usize>) -> Vec<RelatedTest> {
@@ -290,6 +349,7 @@ mod tests {
 
         assert_eq!(risk.level, RiskLevel::Quiet);
         assert_eq!(risk.risk_score, 0);
+        assert!(!risk.known_in_matrix);
         assert!(!risk.reasons.is_empty());
     }
 
@@ -370,6 +430,41 @@ mod tests {
 
         assert_eq!(matrix.commits_scanned, 0);
         assert_eq!(matrix.files.len(), 0);
+    }
+
+    #[test]
+    fn matrix_health_detects_stale_head_and_thin_history() {
+        let workspace = scratch_dir().unwrap();
+        init_repo(workspace.path());
+
+        write_file(workspace.path().join("src/lib.rs"), "pub fn value() {}\n");
+        git(workspace.path(), &["add", "."]);
+        git(workspace.path(), &["commit", "-m", "initial"]);
+
+        let matrix = build_matrix(workspace.path(), 20).unwrap();
+        let fresh = matrix_health(&matrix, workspace.path()).unwrap();
+        assert!(!fresh.stale);
+        assert!(fresh.head_matches);
+        assert_eq!(fresh.confidence, MatrixConfidence::Low);
+        assert!(fresh
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("thin history")));
+
+        write_file(
+            workspace.path().join("src/lib.rs"),
+            "pub fn value() -> u8 { 2 }\n",
+        );
+        git(workspace.path(), &["add", "."]);
+        git(workspace.path(), &["commit", "-m", "change value"]);
+
+        let stale = matrix_health(&matrix, workspace.path()).unwrap();
+        assert!(stale.stale);
+        assert!(!stale.head_matches);
+        assert!(stale
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("different git HEAD")));
     }
 
     fn init_repo(path: &std::path::Path) {

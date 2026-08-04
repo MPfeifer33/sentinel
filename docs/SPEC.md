@@ -29,12 +29,15 @@ The saved matrix contains:
 - repo path
 - history limit
 - commits scanned
+- git `HEAD` SHA at scan time
+- whether the worktree had changed files at scan time
 - per-file risk rows
 - summary counts by risk band
 
 Each file row contains:
 
 - `path`
+- `known_in_matrix`
 - `risk_score`
 - `level`
 - commit count
@@ -56,6 +59,43 @@ Scores are capped to 100 and placed into bands:
 - `quiet`: 0-14
 
 This intentionally favors interpretable heuristics over false precision.
+
+## Matrix Health
+
+Agent-facing JSON responses include `matrix_health` when they are backed by a
+stored or freshly generated matrix.
+
+The health object contains:
+
+- `matrix_head_sha`
+- `current_head_sha`
+- `head_matches`
+- `dirty_at_scan`
+- `changed_files_count`
+- `stale`
+- `confidence`: `high`, `medium`, or `low`
+- `warnings`
+
+Warnings are part of the trust contract. A low-confidence or stale matrix may
+still be useful, but agents should refresh it or broaden validation before
+treating the score as decisive.
+
+`known_in_matrix: false` means the file had no historical signal in the scanned
+matrix. It is not proof that the file is safe; it means Sentinel has no local
+history for that path.
+
+## Agent Doctor
+
+`sentinel doctor` is the one-shot preflight command for agents. It combines:
+
+- matrix health
+- changed files
+- changed-file risks
+- advice
+- recommended next commands
+
+Use it before edits and before commit handoff. The lower-level commands remain
+available for drill-down.
 
 ## JSON Contract
 

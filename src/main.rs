@@ -23,7 +23,12 @@ fn main() {
                         "message": e.to_string(),
                     }
                 });
-                eprintln!("{}", serde_json::to_string_pretty(&err_json).unwrap_or_else(|_| format!("{{\"ok\":false,\"error\":{{\"message\":\"{e}\"}}}}")));
+                eprintln!(
+                    "{}",
+                    serde_json::to_string_pretty(&err_json).unwrap_or_else(|_| format!(
+                        "{{\"ok\":false,\"error\":{{\"message\":\"{e}\"}}}}"
+                    ))
+                );
             } else {
                 eprintln!("error: {e}");
             }
@@ -40,13 +45,15 @@ fn run(cli: &Cli) -> Result<(), SentinelError> {
             if !force && store::has_matrix(&repo) {
                 let matrix = store::load(&repo)?
                     .ok_or_else(|| SentinelError::NotFound("stored matrix".into()))?;
-                report::print_scan(&matrix, cli.is_json())?;
+                let health = analyze::matrix_health(&matrix, &repo)?;
+                report::print_scan(&matrix, &health, cli.is_json())?;
                 return Ok(());
             }
 
             let matrix = analyze::build_matrix(&repo, *limit)?;
             store::save(&repo, &matrix)?;
-            report::print_scan(&matrix, cli.is_json())
+            let health = analyze::matrix_health(&matrix, &repo)?;
+            report::print_scan(&matrix, &health, cli.is_json())
         }
         Command::Risk {
             file,
@@ -62,19 +69,28 @@ fn run(cli: &Cli) -> Result<(), SentinelError> {
                 Vec::new()
             };
 
-            report::print_risk(&matrix, &files, cli.is_json())
+            let health = analyze::matrix_health(&matrix, &repo)?;
+            report::print_risk(&matrix, &health, &files, cli.is_json())
         }
         Command::Matrix { top, limit } => {
             let matrix = load_or_scan(&repo, *limit)?;
-            report::print_matrix(&matrix, *top, cli.is_json())
+            let health = analyze::matrix_health(&matrix, &repo)?;
+            report::print_matrix(&matrix, &health, *top, cli.is_json())
         }
         Command::Tests { file, limit } => {
             let matrix = load_or_scan(&repo, *limit)?;
-            report::print_tests(&matrix, file, cli.is_json())
+            let health = analyze::matrix_health(&matrix, &repo)?;
+            report::print_tests(&matrix, &health, file, cli.is_json())
         }
         Command::Status => {
             let status = store::status(&repo);
             report::print_status(&status, cli.is_json())
+        }
+        Command::Doctor { limit } => {
+            let matrix = load_or_scan(&repo, *limit)?;
+            let health = analyze::matrix_health(&matrix, &repo)?;
+            let files = git::changed_files(&repo)?;
+            report::print_doctor(&matrix, &health, &files, cli.is_json())
         }
     }
 }

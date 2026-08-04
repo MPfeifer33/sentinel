@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::model::FragilityMatrix;
+use crate::model::{FragilityMatrix, MatrixHealth};
 use crate::SentinelError;
 
 const STORE_DIR: &str = ".agent-sentinel";
@@ -14,6 +14,8 @@ pub struct StoreStatus {
     pub store_dir: String,
     pub matrix_path: String,
     pub matrix_exists: bool,
+    pub matrix_health: Option<MatrixHealth>,
+    pub matrix_error: Option<String>,
 }
 
 pub fn has_matrix(repo: &Path) -> bool {
@@ -39,10 +41,21 @@ pub fn save(repo: &Path, matrix: &FragilityMatrix) -> Result<(), SentinelError> 
 }
 
 pub fn status(repo: &Path) -> StoreStatus {
+    let (matrix_health, matrix_error) = match load(repo) {
+        Ok(Some(matrix)) => match crate::analyze::matrix_health(&matrix, repo) {
+            Ok(health) => (Some(health), None),
+            Err(err) => (None, Some(err.to_string())),
+        },
+        Ok(None) => (None, None),
+        Err(err) => (None, Some(err.to_string())),
+    };
+
     StoreStatus {
         store_dir: store_dir(repo).display().to_string(),
         matrix_path: matrix_path(repo).display().to_string(),
         matrix_exists: has_matrix(repo),
+        matrix_health,
+        matrix_error,
     }
 }
 

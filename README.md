@@ -26,6 +26,9 @@ cargo run -- risk --file src/main.rs
 
 # Machine-readable output.
 cargo run -- risk --file src/main.rs --format json
+
+# One-shot agent preflight.
+cargo run -- doctor --format json
 ```
 
 After installation, replace `cargo run --` with `sentinel`.
@@ -41,6 +44,8 @@ sentinel scan --limit 500 --force
 ```
 
 Builds `.agent-sentinel/matrix.json` from git history.
+The stored matrix records the git `HEAD` it was built from and whether the
+worktree had changed files at scan time.
 
 ### risk
 
@@ -52,6 +57,8 @@ sentinel risk --file src/lib.rs --file tests/lib.rs
 
 Reports risk for explicit files. With no `--file`, it inspects files changed
 relative to `HEAD`, including untracked files.
+JSON output includes `matrix_health` so agents can tell whether the matrix is
+fresh, stale, low-confidence, or generated from sparse history.
 
 ### matrix
 
@@ -62,6 +69,8 @@ sentinel matrix --format json
 ```
 
 Shows the highest-risk files in the stored matrix.
+If the matrix is stale or low-confidence, text output prints warnings before the
+file list.
 
 ### tests
 
@@ -78,6 +87,18 @@ sentinel status
 ```
 
 Shows the storage path and data sources.
+Also reports matrix confidence, staleness, commits scanned, tracked files, and
+current changed-file count when a matrix is available.
+
+### doctor
+
+```sh
+sentinel doctor
+sentinel doctor --format json
+```
+
+Runs an agent-facing preflight: matrix health, changed-file risk, advice, and
+recommended next commands.
 
 ## Signals
 
@@ -94,10 +115,23 @@ The MVP scores files from signals that git can prove locally:
 sources provide them. The current matrix is a historically grounded risk hint,
 not an oracle.
 
+## Trust Signals
+
+Sentinel now reports matrix health alongside risk data:
+
+- `stale` when the repo `HEAD` differs from the scan `HEAD`
+- `confidence` lowered for stale or thin-history matrices
+- `warnings` for stale matrices, very small history windows, or dirty scans
+- `known_in_matrix: false` for files with no historical signal
+
+Unknown files are not "proven safe." They are files Sentinel has not seen in the
+scanned local history.
+
 ## Typical Agent Flow
 
 ```sh
 probe doctor
+sentinel doctor
 sentinel scan --force
 sentinel risk
 sieve analyze

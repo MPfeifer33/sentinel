@@ -1,15 +1,20 @@
 use crate::analyze;
-use crate::model::{FileRisk, FragilityMatrix, RelatedTest, RiskLevel};
+use crate::model::{FileRisk, FragilityMatrix, MatrixHealth, RelatedTest, RiskLevel};
 use crate::store::StoreStatus;
 use crate::SentinelError;
 
-pub fn print_scan(matrix: &FragilityMatrix, is_json: bool) -> Result<(), SentinelError> {
+pub fn print_scan(
+    matrix: &FragilityMatrix,
+    health: &MatrixHealth,
+    is_json: bool,
+) -> Result<(), SentinelError> {
     if is_json {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "ok": true,
                 "matrix": matrix,
+                "matrix_health": health,
             }))?
         );
     } else {
@@ -17,6 +22,8 @@ pub fn print_scan(matrix: &FragilityMatrix, is_json: bool) -> Result<(), Sentine
             "sentinel scan: {} commits, {} tracked file(s)",
             matrix.commits_scanned, matrix.summary.tracked_files
         );
+        println!();
+        print_health_warnings(health);
         println!();
         print_summary(matrix);
         println!();
@@ -29,6 +36,7 @@ pub fn print_scan(matrix: &FragilityMatrix, is_json: bool) -> Result<(), Sentine
 
 pub fn print_matrix(
     matrix: &FragilityMatrix,
+    health: &MatrixHealth,
     top: usize,
     is_json: bool,
 ) -> Result<(), SentinelError> {
@@ -40,6 +48,7 @@ pub fn print_matrix(
             serde_json::to_string_pretty(&serde_json::json!({
                 "ok": true,
                 "summary": matrix.summary,
+                "matrix_health": health,
                 "files": files,
             }))?
         );
@@ -50,6 +59,8 @@ pub fn print_matrix(
             matrix.summary.tracked_files
         );
         println!();
+        print_health_warnings(health);
+        println!();
         print_summary(matrix);
         println!();
         print_file_rows(&files);
@@ -59,23 +70,18 @@ pub fn print_matrix(
 
 pub fn print_risk(
     matrix: &FragilityMatrix,
+    health: &MatrixHealth,
     files: &[String],
     is_json: bool,
 ) -> Result<(), SentinelError> {
-    let risks: Vec<FileRisk> = files
-        .iter()
-        .map(|file| {
-            analyze::find_file(matrix, file)
-                .cloned()
-                .unwrap_or_else(|| analyze::synthetic_quiet_file(file))
-        })
-        .collect();
+    let risks = risks_for(matrix, files);
 
     if is_json {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "ok": true,
+                "matrix_health": health,
                 "files": risks,
                 "advice": advice_for(&risks),
             }))?
@@ -83,10 +89,14 @@ pub fn print_risk(
     } else {
         if files.is_empty() {
             println!("sentinel risk: no changed files detected");
+            println!();
+            print_health_warnings(health);
             return Ok(());
         }
 
         println!("sentinel risk: {} file(s)", risks.len());
+        println!();
+        print_health_warnings(health);
         println!();
         for risk in &risks {
             print_file_detail(risk);
@@ -97,8 +107,69 @@ pub fn print_risk(
     Ok(())
 }
 
+pub fn print_doctor(
+    matrix: &FragilityMatrix,
+    health: &MatrixHealth,
+    changed_files: &[String],
+    is_json: bool,
+) -> Result<(), SentinelError> {
+    let risks = risks_for(matrix, changed_files);
+    let recommendations = recommendations_for(health, &risks);
+
+    if is_json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "ok": true,
+                "matrix_health": health,
+                "changed_files": changed_files,
+                "changed_file_risks": risks,
+                "advice": advice_for(&risks),
+                "recommendations": recommendations,
+            }))?
+        );
+    } else {
+        println!("sentinel doctor:");
+        println!();
+        println!("  Matrix confidence: {}", health.confidence.label());
+        println!("  Matrix stale: {}", health.stale);
+        println!("  Commits scanned: {}", health.commits_scanned);
+        println!("  Tracked files: {}", health.tracked_files);
+        println!("  Changed files: {}", changed_files.len());
+        println!();
+        print_health_warnings(health);
+        println!();
+
+        if risks.is_empty() {
+            println!("  No changed files detected.");
+        } else {
+            println!("  Changed-file risk:");
+            for risk in &risks {
+                println!(
+                    "    [{:<6} {:>3}] {}",
+                    risk.level.label(),
+                    risk.risk_score,
+                    risk.path
+                );
+                if !risk.known_in_matrix {
+                    println!("      unknown to matrix");
+                }
+            }
+        }
+        println!();
+        println!("  Advice: {}", advice_for(&risks));
+        println!();
+        println!("  Recommended next commands:");
+        for recommendation in recommendations {
+            println!("    {recommendation}");
+        }
+    }
+    Ok(())
+}
+
 pub fn print_tests(
     matrix: &FragilityMatrix,
+    health: &MatrixHealth,
     file: &str,
     is_json: bool,
 ) -> Result<(), SentinelError> {
@@ -112,11 +183,14 @@ pub fn print_tests(
             serde_json::to_string_pretty(&serde_json::json!({
                 "ok": true,
                 "file": file,
+                "matrix_health": health,
                 "related_tests": risk.related_tests,
             }))?
         );
     } else {
         println!("sentinel tests: {file}");
+        println!();
+        print_health_warnings(health);
         println!();
         print_related_tests(&risk.related_tests);
     }
@@ -138,6 +212,17 @@ pub fn print_status(status: &StoreStatus, is_json: bool) -> Result<(), SentinelE
         println!("  Store: {}", status.store_dir);
         println!("  Matrix: {}", status.matrix_path);
         println!("  Matrix exists: {}", status.matrix_exists);
+        if let Some(health) = &status.matrix_health {
+            println!("  Matrix confidence: {}", health.confidence.label());
+            println!("  Matrix stale: {}", health.stale);
+            println!("  Commits scanned: {}", health.commits_scanned);
+            println!("  Tracked files: {}", health.tracked_files);
+            println!("  Changed files now: {}", health.changed_files_count);
+            println!();
+            print_health_warnings(health);
+        } else if let Some(error) = &status.matrix_error {
+            println!("  Matrix error: {error}");
+        }
         println!();
         println!("  Sources:");
         println!("    git log       — commit frequency, recency, subjects");
@@ -153,6 +238,18 @@ fn print_summary(matrix: &FragilityMatrix) {
     println!("    medium: {}", matrix.summary.medium_risk);
     println!("    low:    {}", matrix.summary.low_risk);
     println!("    quiet:  {}", matrix.summary.quiet);
+}
+
+fn print_health_warnings(health: &MatrixHealth) {
+    if health.warnings.is_empty() {
+        println!("  Matrix health: {} confidence", health.confidence.label());
+        return;
+    }
+
+    println!("  Matrix health: {} confidence", health.confidence.label());
+    for warning in &health.warnings {
+        println!("    warning: {warning}");
+    }
 }
 
 fn print_top_files(matrix: &FragilityMatrix, top: usize) {
@@ -187,6 +284,9 @@ fn print_file_detail(risk: &FileRisk) {
         risk.risk_score,
         risk.path
     );
+    if !risk.known_in_matrix {
+        println!("    coverage: unknown to matrix; treat as new/unsampled file");
+    }
     println!(
         "    history: {} commit(s), {} recent, {} churn",
         risk.commits, risk.recent_commits, risk.total_churn
@@ -218,15 +318,50 @@ fn print_related_tests(tests: &[RelatedTest]) {
     }
 }
 
+fn risks_for(matrix: &FragilityMatrix, files: &[String]) -> Vec<FileRisk> {
+    files
+        .iter()
+        .map(|file| {
+            analyze::find_file(matrix, file)
+                .cloned()
+                .unwrap_or_else(|| analyze::synthetic_quiet_file(file))
+        })
+        .collect()
+}
+
 fn advice_for(risks: &[FileRisk]) -> String {
     if risks.iter().any(|risk| risk.level == RiskLevel::High) {
         "high-risk file present; run targeted tests first, then full validation before commit"
             .into()
     } else if risks.iter().any(|risk| risk.level == RiskLevel::Medium) {
         "medium risk; run related tests and consider full validation if behavior changed".into()
+    } else if risks.iter().any(|risk| !risk.known_in_matrix) {
+        "unknown file history; use normal validation and consider adding focused tests".into()
     } else if risks.is_empty() {
         "no changed files detected".into()
     } else {
         "low historical risk; use normal validation for the project".into()
     }
+}
+
+fn recommendations_for(health: &MatrixHealth, risks: &[FileRisk]) -> Vec<String> {
+    let mut recommendations = Vec::new();
+
+    if health.stale || health.matrix_head_sha.is_none() {
+        recommendations.push("sentinel scan --force".to_string());
+    }
+    if risks.iter().any(|risk| !risk.known_in_matrix) {
+        recommendations.push("add or run focused validation for unknown files".to_string());
+    }
+    if risks.iter().any(|risk| risk.level == RiskLevel::High) {
+        recommendations.push("run related targeted tests before full validation".to_string());
+        recommendations.push("run full project validation before commit".to_string());
+    } else if risks.iter().any(|risk| risk.level == RiskLevel::Medium) {
+        recommendations.push("run related tests for medium-risk files".to_string());
+    }
+    if recommendations.is_empty() {
+        recommendations.push("normal project validation is sufficient".to_string());
+    }
+
+    recommendations
 }
