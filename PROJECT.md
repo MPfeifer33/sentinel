@@ -8,7 +8,10 @@ doctor commands are available with text and JSON output.
 
 **Tech:** Rust 2021, clap 4, serde/serde_json, thiserror.
 
-**Storage:** `.agent-sentinel/matrix.json` under repo root, gitignored.
+**Storage:** `.agent-sentinel/matrix.json` under repo root as generated local
+cache. Sentinel writes `.agent-sentinel/` into `.git/info/exclude`
+idempotently; durable evidence belongs in Switchboard/Latch history or future
+explicit exports.
 
 ## Module Ownership
 
@@ -46,4 +49,5 @@ sentinel doctor                     # agent preflight summary
 
 ## Last Updated
 
-2026-08-04 — Added matrix-health trust signals and agent doctor preflight.
+2026-08-04 — Treated Sentinel matrices as generated local cache and excluded
+`.agent-sentinel/` via repo-local git exclude on write.

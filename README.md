@@ -43,7 +43,10 @@ sentinel scan --force
 sentinel scan --limit 500 --force
 ```
 
-Builds `.agent-sentinel/matrix.json` from git history.
+Builds `.agent-sentinel/matrix.json` from git history as a local cache.
+When Sentinel writes the matrix, it idempotently adds `.agent-sentinel/` to the
+target repo's `.git/info/exclude` so generated matrix files stay out of
+project commits.
 The stored matrix records the git `HEAD` it was built from and whether the
 worktree had changed files at scan time.
 
@@ -114,6 +117,16 @@ The MVP scores files from signals that git can prove locally:
 `sentinel` does not claim to know real test failures unless future evidence
 sources provide them. The current matrix is a historically grounded risk hint,
 not an oracle.
+
+## Local Cache Policy
+
+`.agent-sentinel/matrix.json` is generated local cache. It should not be
+committed as project evidence. Sentinel keeps it out of normal git status by
+maintaining `.agent-sentinel/` in the repo-local `.git/info/exclude` file.
+
+Durable coordination evidence belongs in Switchboard/Latch history, or in a
+future explicit Sentinel export/snapshot command that marks the artifact as
+intentional.
 
 ## Trust Signals
 

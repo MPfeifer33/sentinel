@@ -34,6 +34,12 @@ The saved matrix contains:
 - per-file risk rows
 - summary counts by risk band
 
+The default saved matrix lives at `.agent-sentinel/matrix.json` as generated
+local cache. When Sentinel writes the matrix, it ensures `.agent-sentinel/` is
+present in the target repository's `.git/info/exclude` file. Agents should not
+commit this cache file as durable evidence; long-term run history belongs in
+Switchboard/Latch or in future explicit Sentinel exports/snapshots.
+
 Each file row contains:
 
 - `path`
