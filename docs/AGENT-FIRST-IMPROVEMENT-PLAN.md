@@ -1,6 +1,6 @@
 # Sentinel Agent-First Improvement Plan
 
-Status: proposed
+Status: implemented for doctor/risk parity slice on 2026-08-06
 Date: 2026-08-04
 Owners: Bjarn architecture/plan, Helix implementation review and command verification, Mark product direction
 
@@ -237,9 +237,9 @@ tests:
 the tree is dirty; dirtiness should influence the gate through stale, unknown,
 medium-risk, or high-risk evidence, not because dirty files exist at all.
 
-## Recommended Implementation Slice
+## Implemented Slice
 
-Implement this in one small pass:
+Implemented in the doctor-parity pass:
 
 1. Add model fields:
    - `schema_version`
@@ -262,7 +262,7 @@ Implement this in one small pass:
    - gate exits are not represented as Sentinel runtime errors
 
 4. Make `doctor --format json` include:
-   - `action_required`
+   - `status`
    - `action_level`
    - `gates`
    - `recommended_commands`
@@ -272,7 +272,7 @@ Implement this in one small pass:
    - coverage status
    - score breakdown
    - schema/scoring version
-   - either sorted risk order or explicit `input_order`/`rank`
+   - explicit file-query order remains preserved by output order
 
 6. Keep existing fields backward-compatible.
 
@@ -285,6 +285,13 @@ Implement this in one small pass:
    - medium-risk changed file produces `action_level = validate`
    - high risk produces `action_level = review`
    - strict mode exits nonzero when refresh/validate/review is needed while still printing a successful report
+
+Additional implemented behavior:
+
+- `stop` is now concrete: stale/unfresh + low-confidence + high-risk changed
+  files yields `action_level = stop`.
+- `recommendations` remains as a compatibility alias while
+  `recommended_commands` is the canonical machine-readable surface.
 
 ## Helix Role
 

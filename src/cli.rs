@@ -97,5 +97,8 @@ pub enum Command {
         /// Number of commits to inspect if no matrix exists
         #[arg(long, default_value = "200")]
         limit: usize,
+        /// Exit non-zero according to action_level after printing the normal report
+        #[arg(long)]
+        strict: bool,
     },
 }

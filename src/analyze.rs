@@ -4,8 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::git;
 use crate::model::{
-    FileRisk, FileStats, FragilityMatrix, MatrixConfidence, MatrixHealth, MatrixSummary,
-    RelatedTest, RiskLevel,
+    CoverageStatus, FileRisk, FileStats, FragilityMatrix, MatrixConfidence, MatrixHealth,
+    MatrixSummary, RelatedTest, RiskLevel, ScoreBreakdown,
 };
 use crate::SentinelError;
 
@@ -92,7 +92,9 @@ pub fn synthetic_quiet_file(path: &str) -> FileRisk {
     FileRisk {
         path: path.to_string(),
         known_in_matrix: false,
+        coverage_status: CoverageStatus::Unknown,
         risk_score: 0,
+        score_breakdown: ScoreBreakdown::default(),
         level: RiskLevel::Quiet,
         commits: 0,
         recent_commits: 0,
@@ -107,15 +109,8 @@ pub fn synthetic_quiet_file(path: &str) -> FileRisk {
 }
 
 fn score_file(stats: FileStats) -> FileRisk {
-    let mut raw_score = 0usize;
-    raw_score += stats.commits * 5;
-    raw_score += stats.recent_commits * 10;
-    raw_score += stats.bugfix_commits * 24;
-    raw_score += stats.revert_commits * 32;
-    raw_score += stats.test_cochanges * 14;
-    raw_score += (stats.total_churn / 12).min(80);
-
-    let risk_score = raw_score.min(100) as u32;
+    let score_breakdown = score_breakdown_for_stats(&stats);
+    let risk_score = score_breakdown.total;
     let level = risk_level(risk_score);
     let reasons = reasons_for(&stats, risk_score);
     let related_tests = top_related_tests(stats.related_tests);
@@ -123,7 +118,9 @@ fn score_file(stats: FileStats) -> FileRisk {
     FileRisk {
         path: stats.path,
         known_in_matrix: true,
+        coverage_status: CoverageStatus::Known,
         risk_score,
+        score_breakdown,
         level,
         commits: stats.commits,
         recent_commits: stats.recent_commits,
@@ -134,6 +131,56 @@ fn score_file(stats: FileStats) -> FileRisk {
         last_touched: stats.last_touched,
         related_tests,
         reasons,
+    }
+}
+
+pub fn normalize_agent_fields(mut risk: FileRisk) -> FileRisk {
+    risk.coverage_status = if risk.known_in_matrix {
+        CoverageStatus::Known
+    } else {
+        CoverageStatus::Unknown
+    };
+    risk.score_breakdown = score_breakdown_for_risk(&risk);
+    risk
+}
+
+fn score_breakdown_for_stats(stats: &FileStats) -> ScoreBreakdown {
+    let commits = (stats.commits * 5) as u32;
+    let recent = (stats.recent_commits * 10) as u32;
+    let failure_like = (stats.bugfix_commits * 24) as u32;
+    let revert = (stats.revert_commits * 32) as u32;
+    let test_cochange = (stats.test_cochanges * 14) as u32;
+    let churn = (stats.total_churn / 12).min(80) as u32;
+    let total = (commits + recent + failure_like + revert + test_cochange + churn).min(100);
+
+    ScoreBreakdown {
+        commits,
+        recent,
+        failure_like,
+        revert,
+        test_cochange,
+        churn,
+        total,
+    }
+}
+
+fn score_breakdown_for_risk(risk: &FileRisk) -> ScoreBreakdown {
+    let commits = (risk.commits * 5) as u32;
+    let recent = (risk.recent_commits * 10) as u32;
+    let failure_like = (risk.bugfix_commits * 24) as u32;
+    let revert = (risk.revert_commits * 32) as u32;
+    let test_cochange = (risk.test_cochanges * 14) as u32;
+    let churn = (risk.total_churn / 12).min(80) as u32;
+    let total = (commits + recent + failure_like + revert + test_cochange + churn).min(100);
+
+    ScoreBreakdown {
+        commits,
+        recent,
+        failure_like,
+        revert,
+        test_cochange,
+        churn,
+        total,
     }
 }
 

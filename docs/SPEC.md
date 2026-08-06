@@ -44,7 +44,9 @@ Each file row contains:
 
 - `path`
 - `known_in_matrix`
+- `coverage_status`: `known` or `unknown`
 - `risk_score`
+- `score_breakdown`
 - `level`
 - commit count
 - recent commit count
@@ -104,6 +106,94 @@ history for that path.
 Use it before edits and before commit handoff. The lower-level commands remain
 available for drill-down.
 
+`sentinel doctor --format json` returns:
+
+```json
+{
+  "ok": true,
+  "schema_version": "sentinel.doctor.v1",
+  "status": "caution",
+  "action_level": "refresh",
+  "doctor": {
+    "schema_version": "sentinel.doctor.v1",
+    "scoring_version": "sentinel.git-history.v1",
+    "status": "caution",
+    "action_level": "refresh",
+    "gates": {
+      "matrix_fresh": false,
+      "confidence_ok": true,
+      "unknown_files": true,
+      "high_risk_changed": false,
+      "medium_risk_changed": false,
+      "dirty_now": true
+    },
+    "matrix_health": {},
+    "changed_files": ["src/new.rs"],
+    "changed_file_risks": [],
+    "advice": "...",
+    "recommendations": ["sentinel scan --force"],
+    "recommended_commands": [
+      {
+        "kind": "command",
+        "command": "sentinel scan --force",
+        "argv": ["sentinel", "scan", "--force"],
+        "label": "Refresh the matrix before relying on risk scores",
+        "reason": "matrix is missing HEAD metadata or was generated from a different HEAD",
+        "reason_code": "matrix_not_fresh",
+        "required": true
+      }
+    ]
+  }
+}
+```
+
+For compatibility with the MVP JSON surface, doctor responses also keep
+top-level aliases for `matrix_health`, `changed_files`, `changed_file_risks`,
+`advice`, `recommendations`, and `recommended_commands`. New consumers should
+prefer the nested `doctor` object plus the top-level schema/action fields.
+
+Doctor statuses:
+
+- `ready`: no Sentinel-specific action required
+- `caution`: refresh or validation is required before relying on the result
+- `blocked`: review or stop is required before proceeding automatically
+
+Doctor action levels:
+
+- `none`: normal project validation is enough
+- `refresh`: run `sentinel scan --force` before interpreting risk scores
+- `validate`: run focused or normal validation before handoff
+- `review`: request human/agent review before proceeding
+- `stop`: do not proceed automatically; matrix confidence/freshness and risk
+  signals conflict too strongly
+
+Action precedence is:
+
+```text
+stop > review > refresh > validate > none
+```
+
+Strict mode:
+
+```sh
+sentinel doctor --strict
+sentinel doctor --strict --format json
+```
+
+Strict mode prints the same successful report and then exits according to the
+derived action level:
+
+| Action level | Exit |
+| ------------ | ---- |
+| `none` | `0` |
+| `refresh` | `10` |
+| `validate` | `20` |
+| `review` | `30` |
+| `stop` | `30` |
+
+These are gate exits, not runtime errors. JSON should still contain `ok: true`
+unless Sentinel itself failed to run.
+
 ## JSON Contract
 
 Every JSON response includes:
@@ -113,6 +203,9 @@ Every JSON response includes:
   "ok": true
 }
 ```
+
+Agent-facing JSON responses also include command-specific `schema_version`
+fields and, where scoring is present, `scoring_version`.
 
 Errors use:
 

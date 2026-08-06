@@ -86,11 +86,15 @@ fn run(cli: &Cli) -> Result<(), SentinelError> {
             let status = store::status(&repo);
             report::print_status(&status, cli.is_json())
         }
-        Command::Doctor { limit } => {
+        Command::Doctor { limit, strict } => {
             let matrix = load_or_scan(&repo, *limit)?;
             let health = analyze::matrix_health(&matrix, &repo)?;
             let files = git::changed_files(&repo)?;
-            report::print_doctor(&matrix, &health, &files, cli.is_json())
+            let doctor = report::print_doctor(&matrix, &health, &files, cli.is_json())?;
+            if *strict {
+                std::process::exit(doctor.action_level.strict_exit_code());
+            }
+            Ok(())
         }
     }
 }

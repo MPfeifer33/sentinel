@@ -28,7 +28,11 @@ pub struct FileRisk {
     pub path: String,
     #[serde(default = "default_known_in_matrix")]
     pub known_in_matrix: bool,
+    #[serde(default = "default_coverage_status")]
+    pub coverage_status: CoverageStatus,
     pub risk_score: u32,
+    #[serde(default)]
+    pub score_breakdown: ScoreBreakdown,
     pub level: RiskLevel,
     pub commits: usize,
     pub recent_commits: usize,
@@ -39,6 +43,24 @@ pub struct FileRisk {
     pub last_touched: Option<String>,
     pub related_tests: Vec<RelatedTest>,
     pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverageStatus {
+    Known,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ScoreBreakdown {
+    pub commits: u32,
+    pub recent: u32,
+    pub failure_like: u32,
+    pub revert: u32,
+    pub test_cochange: u32,
+    pub churn: u32,
+    pub total: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,4 +156,8 @@ impl FileStats {
 
 fn default_known_in_matrix() -> bool {
     true
+}
+
+fn default_coverage_status() -> CoverageStatus {
+    CoverageStatus::Known
 }

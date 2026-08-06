@@ -29,6 +29,9 @@ cargo run -- risk --file src/main.rs --format json
 
 # One-shot agent preflight.
 cargo run -- doctor --format json
+
+# Gate a script after printing the same report.
+cargo run -- doctor --strict --format json
 ```
 
 After installation, replace `cargo run --` with `sentinel`.
@@ -98,10 +101,26 @@ current changed-file count when a matrix is available.
 ```sh
 sentinel doctor
 sentinel doctor --format json
+sentinel doctor --strict
 ```
 
 Runs an agent-facing preflight: matrix health, changed-file risk, advice, and
 recommended next commands.
+
+JSON output includes a stable `doctor` object with:
+
+- `schema_version: sentinel.doctor.v1`
+- `scoring_version: sentinel.git-history.v1`
+- `status`: `ready`, `caution`, or `blocked`
+- `action_level`: `none`, `refresh`, `validate`, `review`, or `stop`
+- `gates`: `matrix_fresh`, `confidence_ok`, `unknown_files`,
+  `high_risk_changed`, `medium_risk_changed`, and `dirty_now`
+- `recommended_commands`: typed command/manual actions with stable
+  `reason_code` values
+
+`--strict` prints the normal report with `ok: true` and then exits according to
+the gate: `0` for `none`, `10` for `refresh`, `20` for `validate`, and `30`
+for `review`/`stop`. Gate exits are not Sentinel runtime failures.
 
 ## Signals
 
@@ -137,6 +156,8 @@ Sentinel now reports matrix health alongside risk data:
 - `warnings` for stale matrices, very small history windows, or dirty scans
 - `dirty_now` when the current worktree has changed or untracked files
 - `known_in_matrix: false` for files with no historical signal
+- `coverage_status: known|unknown` for agent-friendly coverage checks
+- `score_breakdown` for auditable scoring components
 
 Unknown files are not "proven safe." They are files Sentinel has not seen in the
 scanned local history.
