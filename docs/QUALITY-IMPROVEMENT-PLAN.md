@@ -2,7 +2,7 @@
 
 Status: active
 Date: 2026-08-04
-Owners: Bjarn architecture/implementation, Helix read-only review, Mark product direction
+Owners: Builder architecture/implementation, Reviewer read-only review, operator product direction
 
 ## Product Goal
 
@@ -148,9 +148,9 @@ Sentinel should fit naturally with the local agent ops suite:
 Sentinel should avoid duplicating those tools. Its lane is historical
 fragility, signal quality, and validation urgency.
 
-## Helix Review Focus
+## Reviewer Review Focus
 
-Helix should review for:
+Reviewer should review for:
 
 - misleading or overconfident output
 - JSON contract awkwardness for agents

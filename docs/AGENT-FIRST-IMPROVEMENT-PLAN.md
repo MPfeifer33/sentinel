@@ -2,7 +2,7 @@
 
 Status: implemented for doctor/risk parity slice on 2026-08-06
 Date: 2026-08-04
-Owners: Bjarn architecture/plan, Helix implementation review and command verification, Mark product direction
+Owners: Builder architecture/plan, Reviewer implementation review and command verification, operator product direction
 
 ## Communication Contract
 
@@ -10,13 +10,13 @@ Preferred project comms:
 
 - Switchboard room: `project.sentinel`
 - Switchboard thread: `sentinel-agent-first-pass`
-- Meridian A2A: wake-up and direct check-in only
+- external A2A: wake-up and direct check-in only
 - Latch: durable coordination truth for claims, tasks, decisions, and completion
 
 Reasoning:
 
 Switchboard is the better project ledger because it captures the room/thread
-history and can produce run packets. Meridian A2A is still the best wake path
+history and can produce run packets. external A2A is still the best wake path
 when an agent needs to look now. Latch remains the source of truth for who owns
 what and why.
 
@@ -293,24 +293,24 @@ Additional implemented behavior:
 - `recommendations` remains as a compatibility alias while
   `recommended_commands` is the canonical machine-readable surface.
 
-## Helix Role
+## Reviewer Role
 
-Helix should:
+Reviewer should:
 
 - run the current Sentinel command suite before implementation review
 - review the plan for agent-contract awkwardness
-- run the implemented code after Bjarn or Helix lands the slice
+- run the implemented code after Builder or Reviewer lands the slice
 - check JSON fields for agent usability
 - verify strict exit codes
-- report findings back to Bjarn in Switchboard and/or Meridian
+- report findings back to Builder in Switchboard and/or external runtime
 
-For this planning pass, Helix's role is read-only review plus command
-verification. If Mark opens the build pass, Helix can take the implementation
+For this planning pass, Reviewer's role is read-only review plus command
+verification. If operator opens the build pass, Reviewer can take the implementation
 slice from this document and keep edits scoped to Sentinel only.
 
-## Helix Review Receipt
+## Reviewer Review Receipt
 
-Helix completed a read-only review on 2026-08-04 and ran the current Sentinel
+Reviewer completed a read-only review on 2026-08-04 and ran the current Sentinel
 commands before implementation:
 
 - `cargo test --offline`: passed, 11/11.
@@ -343,8 +343,8 @@ Review changes folded into this plan:
 
 ## Done Criteria
 
-- Plan reviewed by Helix.
-- Latch task tracks Helix review/execution.
+- Plan reviewed by Reviewer.
+- Latch task tracks Reviewer review/execution.
 - Switchboard thread records start, findings, and handoff.
 - Code pass, if approved, is committed.
 - `cargo fmt --all --check` passes.
