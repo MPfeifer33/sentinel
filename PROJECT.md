@@ -7,9 +7,7 @@ and warns agents when changed files carry historical risk.
 doctor commands are available with text and JSON output. Doctor now exposes
 agent-facing schema/action/gate/recommendation fields and strict gate exits.
 
-**Tech:** Rust 2021, clap 4, serde/serde_json, thiserror, agent-tools-core (path dep).
 
-**Dependency note:** `agent-tools-core` is a path dependency (`../agent-tools-core`). A standalone clone needs that repo checked out beside this one until Mark decides to publish the crate (crates.io or git dep).
 
 **Storage:** `.agent-sentinel/matrix.json` under repo root as generated local
 cache. Sentinel writes `.agent-sentinel/` into `.git/info/exclude`
