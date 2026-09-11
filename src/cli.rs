@@ -1,3 +1,4 @@
+pub use agent_tools_core::Format as OutputFormat;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -23,31 +24,14 @@ pub struct Cli {
 }
 
 impl Cli {
+    /// `--repo` > `AGENT_REPO` > detected `.git` root > cwd (see agent-tools-core).
     pub fn resolve_repo(&self) -> Result<PathBuf, SentinelError> {
-        if let Some(ref repo) = self.repo {
-            return Ok(repo.clone());
-        }
-        if let Ok(output) = std::process::Command::new("git")
-            .args(["rev-parse", "--show-toplevel"])
-            .output()
-        {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                return Ok(PathBuf::from(path));
-            }
-        }
-        std::env::current_dir().map_err(SentinelError::Io)
+        Ok(agent_tools_core::resolve_repo(self.repo.as_deref())?)
     }
 
     pub fn is_json(&self) -> bool {
         matches!(self.format, OutputFormat::Json)
     }
-}
-
-#[derive(Debug, Clone, clap::ValueEnum)]
-pub enum OutputFormat {
-    Json,
-    Text,
 }
 
 #[derive(Subcommand, Debug)]

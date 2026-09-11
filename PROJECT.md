@@ -3,11 +3,13 @@
 **What:** Continuous regression watcher. Builds a git-history fragility matrix
 and warns agents when changed files carry historical risk.
 
-**Status:** Quality pass in progress. Scan, matrix, risk, tests, status, and
+**Status:** Quality pass in progress. Scan, matrix, risk, tests, status, and Shared plumbing (repo resolution, `--format`, exit codes incl. strict gate codes, error report) comes from `agent-tools-core`; `cargo test` passes with 20 tests.
 doctor commands are available with text and JSON output. Doctor now exposes
 agent-facing schema/action/gate/recommendation fields and strict gate exits.
 
-**Tech:** Rust 2021, clap 4, serde/serde_json, thiserror.
+**Tech:** Rust 2021, clap 4, serde/serde_json, thiserror, agent-tools-core (path dep).
+
+**Dependency note:** `agent-tools-core` is a path dependency (`../agent-tools-core`). A standalone clone needs that repo checked out beside this one until Mark decides to publish the crate (crates.io or git dep).
 
 **Storage:** `.agent-sentinel/matrix.json` under repo root as generated local
 cache. Sentinel writes `.agent-sentinel/` into `.git/info/exclude`
@@ -52,6 +54,10 @@ sentinel doctor --strict            # same report, gate-coded exit
 - score breakdown and `coverage_status` for risk rows
 
 ## Last Updated
+
+2026-09-11 — Moved repo resolution, `--format`, exit codes (strict gate
+10/20/30 now named in the shared table), and the stderr error report onto
+`agent-tools-core`; added a `--version` test. `cargo test` passes with 20 tests.
 
 2026-08-06 — Added agent-first doctor parity: schema/scoring versions,
 `status`, `action_level`, gates, typed recommendations, strict gate exits,

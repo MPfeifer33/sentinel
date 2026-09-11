@@ -218,3 +218,11 @@ Errors use:
   }
 }
 ```
+
+## Shared plumbing (agent-tools-core)
+
+Repo resolution, the `--format json|text` value enum, the exit-code table,
+and the stderr error report (`{"ok": false, "error": {"code", "message"}}`)
+come from the shared `agent-tools-core` crate. Repo resolution order:
+`--repo` > `AGENT_REPO` env > nearest `.git` ancestor of cwd > cwd; existing
+paths are canonicalized. The JSON contract documented above is unchanged.

@@ -5,6 +5,7 @@ use crate::model::{
 };
 use crate::store::StoreStatus;
 use crate::SentinelError;
+use agent_tools_core::ExitCode;
 
 const SCORING_VERSION: &str = "sentinel.git-history.v1";
 const SCAN_SCHEMA_VERSION: &str = "sentinel.scan.v1";
@@ -70,10 +71,10 @@ impl ActionLevel {
 
     pub fn strict_exit_code(self) -> i32 {
         match self {
-            ActionLevel::None => 0,
-            ActionLevel::Refresh => 10,
-            ActionLevel::Validate => 20,
-            ActionLevel::Review | ActionLevel::Stop => 30,
+            ActionLevel::None => ExitCode::Success.code(),
+            ActionLevel::Refresh => ExitCode::GateAct.code(),
+            ActionLevel::Validate => ExitCode::GateReview.code(),
+            ActionLevel::Review | ActionLevel::Stop => ExitCode::GateStop.code(),
         }
     }
 }

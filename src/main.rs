@@ -5,6 +5,7 @@ mod model;
 mod report;
 mod store;
 
+use agent_tools_core::{exit_with, report_error, ExitCode, RepoError};
 use clap::Parser;
 use cli::{Cli, Command};
 
@@ -14,25 +15,8 @@ fn main() {
     match result {
         Ok(()) => {}
         Err(e) => {
-            let code = e.exit_code();
-            if cli.is_json() {
-                let err_json = serde_json::json!({
-                    "ok": false,
-                    "error": {
-                        "code": e.error_code(),
-                        "message": e.to_string(),
-                    }
-                });
-                eprintln!(
-                    "{}",
-                    serde_json::to_string_pretty(&err_json).unwrap_or_else(|_| format!(
-                        "{{\"ok\":false,\"error\":{{\"message\":\"{e}\"}}}}"
-                    ))
-                );
-            } else {
-                eprintln!("error: {e}");
-            }
-            std::process::exit(code);
+            report_error(cli.is_json(), e.error_code(), &e.to_string());
+            exit_with(e.exit_code());
         }
     }
 }
@@ -92,7 +76,7 @@ fn run(cli: &Cli) -> Result<(), SentinelError> {
             let files = git::changed_files(&repo)?;
             let doctor = report::print_doctor(&matrix, &health, &files, cli.is_json())?;
             if *strict {
-                std::process::exit(doctor.action_level.strict_exit_code());
+                exit_with(doctor.action_level.strict_exit_code());
             }
             Ok(())
         }
@@ -124,13 +108,20 @@ pub enum SentinelError {
     Json(#[from] serde_json::Error),
 }
 
+impl From<RepoError> for SentinelError {
+    fn from(err: RepoError) -> Self {
+        SentinelError::Io(err.into())
+    }
+}
+
 impl SentinelError {
     pub fn exit_code(&self) -> i32 {
         match self {
-            SentinelError::Validation(_) => 1,
-            SentinelError::NotFound(_) => 3,
+            SentinelError::Validation(_) => ExitCode::Validation.code(),
+            SentinelError::NotFound(_) => ExitCode::NotFound.code(),
+            // Historical sentinel code; predates the shared table.
             SentinelError::Io(_) => 2,
-            SentinelError::Json(_) => 1,
+            SentinelError::Json(_) => ExitCode::Validation.code(),
         }
     }
 
